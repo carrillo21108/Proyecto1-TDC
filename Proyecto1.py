@@ -275,7 +275,9 @@ def plot_af(state, graph=None, visited=None):
         graph = Digraph(engine='dot', graph_attr={'rankdir': 'LR'})
     
     if state.is_accept:
-        graph.node(name=str(id(state)), label=state.name, shape='doublecircle')
+        graph.node(name=str(id(state)), label=state.name, shape='doublecircle', color="green")
+    elif len(visited)==0:
+        graph.node(name=str(id(state)), label=state.name, shape='circle', color="blue")
     else:
         graph.node(name=str(id(state)), label=state.name, shape='circle')
         
@@ -340,7 +342,6 @@ def AFN_simulation(afn,w):
     
 
 #Proyecto 1
-
 class AFDState:
     state_counter = 'A'
     states = set()
@@ -417,29 +418,62 @@ def afn_to_afd(alphabet,afn):
     
     return afd
 
-def afd_to_afdmin(alphabet,afd):
-    afdmin = AFD()
-    subsets = []
-    subsets.append(afd.states.difference(afd.accept))
-    subsets.append(afd.accept)
+def afd_to_afdmin(alphabet, afd):
+    P = [set(afd.accept), afd.states - set(afd.accept)]
+    
+    W = [set(afd.accept), afd.states - set(afd.accept)]
+    
+    while W:
+        A = W.pop(0)
+        for c in alphabet:
+            affected_states = set()
+            for state in afd.states:
+                if c in state.transitions and state.transitions[c][0] in A:
+                    affected_states.add(state)
 
-    table = []
+            for Y in P:
+                inter = Y.intersection(affected_states)
+                diff = Y.difference(affected_states)
+                
+                if inter and diff:
+                    P.remove(Y)
+                    P.append(inter)
+                    P.append(diff)
+
+                    if Y in W:
+                        W.remove(Y)
+                        W.append(inter)
+                        W.append(diff)
+                    else:
+                        W.append(inter)
+                        W.append(diff)
+
+    afd_min = AFD()
     
-    for subset in subsets:
-        for state in subset:
-            res = {}
-            res["name"] = state.name
-            for symbol in alphabet:
-                param = set()
-                param.add(state)
-                element = move(param,symbol).pop()
-                for subset in subsets:
-                    if element in subset:
-                        res[symbol]=subsets.index(subset)
-                        
-            table.append(res)
+    state_mapping = {}
+    for new_state_group in P:
+        new_state = AFDState()
+        for old_state in new_state_group:
+            state_mapping[old_state] = new_state
+            if old_state.is_accept:
+                new_state.is_accept = True
+                afd_min.accept.add(new_state)
+        afd_min.states.add(new_state)
     
-    return table
+    afd_min.start = state_mapping[afd.start]
+    
+    for old_state in afd.states:
+        new_state = state_mapping.get(old_state)
+        if new_state:
+            for symbol, old_transitions in old_state.transitions.items():
+                old_destination_state = old_transitions[0]
+                new_destination_state = state_mapping.get(old_destination_state)
+                
+                if new_destination_state:
+                    new_state.transitions[symbol] = [new_destination_state]
+    
+    return afd_min
+
     
 def AFD_simulation(afd,w):
     F = afd.accept
@@ -465,33 +499,34 @@ with open("texto.txt", 'r') as f:
     i=1
     for linea in f:
         linea = linea.strip()
+        linea = linea.replace("Îµ","ε")
         postfix = shunting_yard(linea)
         print(f"Expresion regular: {linea}")
         print(f"Postfijo: {postfix}")
         ast_root = create_ast(postfix)
         tree_graph = plot_tree(ast_root)
         nombre_archivo_pdf = 'AST no '+ str(i)
-        #tree_graph.view(filename=nombre_archivo_pdf,cleanup=True)
+        tree_graph.view(filename=nombre_archivo_pdf,cleanup=True)
         
         #Lab4
         afn = ast_to_afn(ast_root)
         afn.states = AFNState.states
         afn_graph = plot_af(afn.start)
         nombre_archivo_pdf = 'AFN no ' + str(i)
-        #afn_graph.view(filename=nombre_archivo_pdf,cleanup=True)
+        afn_graph.view(filename=nombre_archivo_pdf,cleanup=True)
         
         #Esperar ingreso de cadena
-        #respuesta = ""
-        #while respuesta!="y" and respuesta!="n":
-            #respuesta = input("\n¿Desea ingresar una cadena para simular el AFN? y/n\n")
-            #if respuesta=="y":
-                #w = input("Ingrese la cadena w.\n")
-                #print(AFN_simulation(afn,w))
-                #input("Presione [Enter] para continuar.")
-            #elif respuesta=="n":
-                #pass
-            #else:
-                #print("Respuesta incorrecta. Intente de nuevo.")
+        respuesta = ""
+        while respuesta!="y" and respuesta!="n":
+            respuesta = input("\n¿Desea ingresar una cadena para simular el AFN? y/n\n")
+            if respuesta=="y":
+                w = input("Ingrese la cadena w.\n")
+                print(AFN_simulation(afn,w))
+                input("Presione [Enter] para continuar.")
+            elif respuesta=="n":
+                pass
+            else:
+                print("Respuesta incorrecta. Intente de nuevo.")
         
         #Proyecto 1
         #AFN a AFD
@@ -502,25 +537,45 @@ with open("texto.txt", 'r') as f:
         nombre_archivo_pdf = 'AFD no ' + str(i)
         afd_graph.view(filename=nombre_archivo_pdf,cleanup=True)
         
+        #Esperar ingreso de cadena
+        respuesta = ""
+        while respuesta!="y" and respuesta!="n":
+            respuesta = input("\n¿Desea ingresar una cadena para simular el AFD? y/n\n")
+            if respuesta=="y":
+                w = input("Ingrese la cadena w.\n")
+                print(AFD_simulation(afd,w))
+                input("Presione [Enter] para continuar.")
+            elif respuesta=="n":
+                pass
+            else:
+                print("Respuesta incorrecta. Intente de nuevo.")
+        
+        AFDState.state_counter = 'A'
+        AFDState.states = set()
+        
         #Minimizacion AFD
         afdmin = afd_to_afdmin(alphabet,afd)
-        print(afdmin)
+        afdmin.states = AFDState.states
+        afdmin_graph = plot_af(afdmin.start)
+        nombre_archivo_pdf = 'AFD MIN no ' + str(i)
+        afdmin_graph.view(filename=nombre_archivo_pdf,cleanup=True)
         
         #Esperar ingreso de cadena
-        #respuesta = ""
-        #while respuesta!="y" and respuesta!="n":
-            #respuesta = input("\n¿Desea ingresar una cadena para simular el AFD? y/n\n")
-            #if respuesta=="y":
-                #w = input("Ingrese la cadena w.\n")
-                #print(AFD_simulation(afd,w))
-                #input("Presione [Enter] para continuar.")
-            #elif respuesta=="n":
-                #pass
-            #else:
-                #print("Respuesta incorrecta. Intente de nuevo.")
+        respuesta = ""
+        while respuesta!="y" and respuesta!="n":
+            respuesta = input("\n¿Desea ingresar una cadena para simular el AFD minimizado? y/n\n")
+            if respuesta=="y":
+                w = input("Ingrese la cadena w.\n")
+                print(AFD_simulation(afdmin,w))
+                input("Presione [Enter] para continuar.")
+            elif respuesta=="n":
+                pass
+            else:
+                print("Respuesta incorrecta. Intente de nuevo.")
         
         AFNState.state_counter = 0
-        AFNState.states = []
+        AFNState.states = set()
         AFDState.state_counter = 'A'
-        AFDState.states = []
+        AFDState.states = set()
         i+=1
+
