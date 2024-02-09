@@ -254,9 +254,13 @@ def ast_to_afn(node,left_start=None,start_node=True):
         afn.start = start
         afn.accept = accept
     elif node.value == '.':
-        afn_left = ast_to_afn(node=node.left,start_node=False)
+        if left_start:
+            afn_left = ast_to_afn(node=node.left,left_start=left_start,start_node=False)
+        else:
+            afn_left = ast_to_afn(node=node.left,start_node=False)
+
         afn_right = ast_to_afn(node=node.right,left_start=afn_left.accept,start_node=False)
-        
+
         afn.start = afn_left.start
         afn.accept = afn_right.accept
         if start_node:
@@ -390,8 +394,11 @@ def afn_to_afd(alphabet,afn):
     
     contador=0
     nuevosEstados=0
+    firstIteration = False
     
-    while contador!=nuevosEstados or (contador==0 and nuevosEstados==0):
+    while contador!=nuevosEstados or not firstIteration:
+        firstIteration=True
+        
         if nuevosEstados!=0:
             contador+=1
         
